@@ -1,4 +1,4 @@
-import { Node, Edge, WorkflowConfig, LogEntry, TaskNode, AgentNode, OutputNode } from '../types';
+import { Node, Edge, WorkflowConfig, LogEntry, TaskNode, AgentNode, OutputNode, WaitNode } from '../types';
 
 type LogCallback = (log: LogEntry) => void;
 
@@ -10,6 +10,8 @@ function getCurrentTimestamp(): string {
         second: '2-digit',
     });
 }
+
+type SequenceNode = TaskNode | WaitNode;
 
 export class WorkflowRunner {
     private nodes: Node[];
@@ -37,42 +39,57 @@ export class WorkflowRunner {
         return this.nodes.find(n => n.id === agentEdge.source) as AgentNode | undefined;
     }
 
-    private getTopologicalOrder(): TaskNode[] {
-        const taskNodes = this.nodes.filter(n => n.type === 'task') as TaskNode[];
+    private getTopologicalOrder(): SequenceNode[] {
+        const sequenceNodes = this.nodes.filter(n => n.type === 'task' || n.type === 'wait') as SequenceNode[];
         const adj: { [key: string]: string[] } = {};
         const inDegree: { [key: string]: number } = {};
 
-        taskNodes.forEach(task => {
-            adj[task.id] = [];
-            inDegree[task.id] = 0;
+        sequenceNodes.forEach(node => {
+            adj[node.id] = [];
+            inDegree[node.id] = 0;
         });
 
         this.edges.forEach(edge => {
             const source = this.nodes.find(n => n.id === edge.source);
             const target = this.nodes.find(n => n.id === edge.target);
-            if (source?.type === 'task' && target?.type === 'task') {
+            const isSourceSequence = source?.type === 'task' || source?.type === 'wait' || source?.type === 'trigger';
+            const isTargetSequence = target?.type === 'task' || target?.type === 'wait';
+            
+            if (source && target && isSourceSequence && isTargetSequence) {
+                adj[source.id] = adj[source.id] || [];
                 adj[source.id].push(target.id);
                 inDegree[target.id]++;
             }
         });
 
-        const queue = taskNodes.filter(task => inDegree[task.id] === 0);
-        const order: TaskNode[] = [];
+        // Trigger nodes provide the starting points
+        const triggerEdges = this.edges.filter(e => this.nodes.find(n => n.id === e.source)?.type === 'trigger');
+        triggerEdges.forEach(edge => {
+             const targetNode = sequenceNodes.find(n => n.id === edge.target);
+             // Start from triggers, but don't assume inDegree is 0
+        });
+
+        const queue = sequenceNodes.filter(node => inDegree[node.id] === 0);
+        const order: SequenceNode[] = [];
 
         while (queue.length > 0) {
-            const currentId = queue.shift()!.id;
-            const currentNode = taskNodes.find(t => t.id === currentId)!;
-            order.push(currentNode);
+            const current = queue.shift()!;
+            order.push(current);
 
-            (adj[currentId] || []).forEach(neighborId => {
-                inDegree[neighborId]--;
-                if (inDegree[neighborId] === 0) {
-                    queue.push(taskNodes.find(t => t.id === neighborId)!);
+            this.edges.forEach(edge => {
+                if(edge.source === current.id) {
+                    const neighbor = sequenceNodes.find(n => n.id === edge.target);
+                    if (neighbor) {
+                        inDegree[neighbor.id]--;
+                        if(inDegree[neighbor.id] === 0) {
+                            queue.push(neighbor);
+                        }
+                    }
                 }
             });
         }
         
-        if (order.length !== taskNodes.length) {
+        if (order.length !== sequenceNodes.length) {
             this.log('error', 'Cycle detected in workflow graph. Cannot determine execution order.');
             return []; // Cycle detected
         }
@@ -90,7 +107,7 @@ export class WorkflowRunner {
             const incomingEdge = this.edges.find(e => e.target === outputNode.id);
             if (incomingEdge) {
                 const sourceTaskOutput = this.taskOutputs.get(incomingEdge.source);
-                if (sourceTaskOutput) {
+                if (sourceTaskOutput !== undefined) {
                     const { type, filename } = outputNode.data;
                     let message = '';
                     if (type === 'SaveToFile') {
@@ -100,7 +117,7 @@ export class WorkflowRunner {
                     }
                     this.log('output', message);
                 } else {
-                    this.log('error', `Output node "${outputNode.label}" is connected to a task that produced no output.`);
+                    this.log('error', `Output node "${outputNode.label}" is connected to a node that produced no output.`);
                 }
             } else {
                 this.log('error', `Output node "${outputNode.label}" is not connected to any task.`);
@@ -114,37 +131,46 @@ export class WorkflowRunner {
         this.taskOutputs.clear();
         this.log('info', 'Workflow run started.');
 
-        const orderedTasks = this.getTopologicalOrder();
+        const orderedSequence = this.getTopologicalOrder();
 
-        if (orderedTasks.length === 0 && this.nodes.some(n => n.type === 'task')) {
-             this.log('error', 'Could not determine task execution order. Check for cycles or disconnected tasks.');
+        if (orderedSequence.length === 0 && this.nodes.some(n => n.type === 'task' || n.type === 'wait')) {
+             this.log('error', 'Could not determine execution order. Check for cycles or disconnected nodes.');
              this.isRunning = false;
              return;
         }
 
         try {
-            for (const task of orderedTasks) {
+            for (const node of orderedSequence) {
                 if (!this.isRunning) {
                     this.log('info', 'Workflow execution was stopped.');
                     return;
                 }
 
-                this.log('info', `Executing task: "${task.label}"...`);
-                await this.sleep(1000);
+                if (node.type === 'task') {
+                    this.log('info', `Executing task: "${node.label}"...`);
+                    await this.sleep(1000);
 
-                const agentNode = this.getAgentForTask(task.id);
-                if (agentNode) {
-                    this.log('info', `Agent "${agentNode.label}" is performing the task.`);
-                    await this.sleep(1500);
-                } else {
-                    this.log('error', `Task "${task.label}" has no assigned agent. Skipping.`);
-                    continue;
+                    const agentNode = this.getAgentForTask(node.id);
+                    if (agentNode) {
+                        this.log('info', `Agent "${agentNode.label}" is performing the task.`);
+                        await this.sleep(1500);
+                    } else {
+                        this.log('error', `Task "${node.label}" has no assigned agent. Skipping.`);
+                        continue;
+                    }
+                    
+                    const output = node.data.expected_output;
+                    this.taskOutputs.set(node.id, output);
+                    this.log('success', `Task "${node.label}" completed.`);
+                    await this.sleep(500);
+
+                } else if (node.type === 'wait') {
+                    const duration = node.data.duration;
+                    this.log('info', `Waiting for ${duration} seconds...`);
+                    await this.sleep(duration * 1000);
+                    this.log('success', `Wait finished.`);
+                    this.taskOutputs.set(node.id, ''); // Wait nodes produce no output
                 }
-                
-                const output = task.data.expected_output;
-                this.taskOutputs.set(task.id, output);
-                this.log('success', `Task "${task.label}" completed.`);
-                await this.sleep(500);
             }
 
             this.processOutputs();

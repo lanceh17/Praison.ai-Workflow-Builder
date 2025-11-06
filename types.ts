@@ -1,11 +1,49 @@
-// Fix: Define all necessary types for the application.
-export type NodeType = 'agent' | 'task' | 'tool' | 'trigger' | 'output';
-
 export interface Point {
   x: number;
   y: number;
 }
 
+export type NodeType = 'agent' | 'task' | 'tool' | 'trigger' | 'output' | 'wait';
+
+// Node data interfaces
+export interface BaseNodeData {
+    [key: string]: any;
+}
+
+export interface AgentNodeData extends BaseNodeData {
+    role: string;
+    goal: string;
+    backstory: string;
+    memory: boolean;
+}
+
+export interface TaskNodeData extends BaseNodeData {
+    description: string;
+    expected_output: string;
+}
+
+export interface ToolNodeData extends BaseNodeData {
+    name: 'duckduckgo_search' | 'google_search' | 'file_reader' | 'calculator' | string;
+}
+
+export type TriggerType = 'Manual' | 'Schedule' | 'Webhook' | 'Chat';
+
+export interface TriggerNodeData extends BaseNodeData {
+    type: TriggerType;
+}
+
+export type OutputType = 'Display' | 'SaveToFile';
+
+export interface OutputNodeData extends BaseNodeData {
+    type: OutputType;
+    filename?: string;
+}
+
+export interface WaitNodeData extends BaseNodeData {
+    duration: number; // in seconds
+}
+
+// Node interfaces
 export interface BaseNode {
   id: string;
   type: NodeType;
@@ -13,60 +51,37 @@ export interface BaseNode {
   label: string;
 }
 
-export interface AgentNodeData {
-  role: string;
-  goal: string;
-  backstory: string;
-  memory: boolean;
-}
 export interface AgentNode extends BaseNode {
   type: 'agent';
   data: AgentNodeData;
 }
 
-export interface TaskNodeData {
-  description: string;
-  expected_output: string;
-}
 export interface TaskNode extends BaseNode {
   type: 'task';
   data: TaskNodeData;
 }
 
-export interface ToolNodeData {
-  name: string;
-}
 export interface ToolNode extends BaseNode {
   type: 'tool';
   data: ToolNodeData;
 }
 
-export interface TriggerNodeData {
-  // FIX: Add 'Chat' to the union type to support chat-based workflows.
-  type: 'Manual' | 'Schedule' | 'Webhook' | 'Chat';
-  config?: {
-    cron?: string;
-    url?: string;
-  };
-}
 export interface TriggerNode extends BaseNode {
   type: 'trigger';
   data: TriggerNodeData;
 }
 
-export type OutputType = 'Display' | 'SaveToFile';
-
-export interface OutputNodeData {
-    type: OutputType;
-    filename?: string;
-}
-
 export interface OutputNode extends BaseNode {
-    type: 'output';
-    data: OutputNodeData;
+  type: 'output';
+  data: OutputNodeData;
 }
 
-export type Node = AgentNode | TaskNode | ToolNode | TriggerNode | OutputNode;
+export interface WaitNode extends BaseNode {
+  type: 'wait';
+  data: WaitNodeData;
+}
+
+export type Node = AgentNode | TaskNode | ToolNode | TriggerNode | OutputNode | WaitNode;
 
 export interface Edge {
   id: string;
@@ -79,6 +94,8 @@ export interface WorkflowConfig {
   verbose: boolean;
 }
 
+export type WorkflowStatus = 'idle' | 'running' | 'stopped' | 'error';
+
 export interface Workflow {
   nodes: Node[];
   edges: Edge[];
@@ -86,15 +103,13 @@ export interface Workflow {
 }
 
 export interface WorkflowTemplate {
-    name: string;
-    description: string;
-    workflow: Workflow;
+  name: string;
+  description: string;
+  workflow: Workflow;
 }
-
-export type WorkflowStatus = 'idle' | 'running' | 'stopped' | 'error';
 
 export interface LogEntry {
   timestamp: string;
-  type: 'success' | 'error' | 'info' | 'output';
+  type: 'info' | 'success' | 'error' | 'output';
   message: string;
 }
