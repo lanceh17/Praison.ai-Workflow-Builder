@@ -1,3 +1,4 @@
+
 export interface Point {
   x: number;
   y: number;
@@ -15,6 +16,7 @@ export interface AgentNodeData extends BaseNodeData {
     goal: string;
     backstory: string;
     memory: boolean;
+    agentId: string;
 }
 
 export interface TaskNodeData extends BaseNodeData {
@@ -32,11 +34,12 @@ export interface TriggerNodeData extends BaseNodeData {
     type: TriggerType;
 }
 
-export type OutputType = 'Display' | 'SaveToFile';
+export type OutputType = 'Display' | 'SaveToFile' | 'Webhook';
 
 export interface OutputNodeData extends BaseNodeData {
     type: OutputType;
     filename?: string;
+    url?: string;
 }
 
 export interface WaitNodeData extends BaseNodeData {
@@ -84,32 +87,32 @@ export interface WaitNode extends BaseNode {
 export type Node = AgentNode | TaskNode | ToolNode | TriggerNode | OutputNode | WaitNode;
 
 export interface Edge {
-  id: string;
-  source: string;
-  target: string;
+    id: string;
+    source: string;
+    target: string;
 }
 
 export interface WorkflowConfig {
-  process: 'sequential' | 'hierarchical';
-  verbose: boolean;
+    process: 'sequential' | 'hierarchical';
+    verbose: boolean;
 }
 
-export type WorkflowStatus = 'idle' | 'running' | 'stopped' | 'error';
-
 export interface Workflow {
-  nodes: Node[];
-  edges: Edge[];
-  config: WorkflowConfig;
+    nodes: Node[];
+    edges: Edge[];
+    config: WorkflowConfig;
+}
+
+export type WorkflowStatus = 'idle' | 'running' | 'stopped';
+
+export interface LogEntry {
+    timestamp: string;
+    type: 'info' | 'success' | 'error' | 'output';
+    message: string;
 }
 
 export interface WorkflowTemplate {
-  name: string;
-  description: string;
-  workflow: Workflow;
-}
-
-export interface LogEntry {
-  timestamp: string;
-  type: 'info' | 'success' | 'error' | 'output';
-  message: string;
+    name: string;
+    description: string;
+    workflow: Workflow;
 }

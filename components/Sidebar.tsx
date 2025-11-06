@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { NodeType, WorkflowTemplate, WorkflowConfig, WorkflowStatus } from '../types';
 import Modal from './Modal'; // Import Modal
@@ -25,6 +26,15 @@ const nodeButtonConfig: Record<NodeType, string> = {
     tool: '🛠️',
     wait: '⏳',
     output: '📤',
+};
+
+const nodeButtonColors: Record<NodeType, string> = {
+    trigger: 'bg-green-600 hover:bg-green-500',
+    agent: 'bg-amber-600 hover:bg-amber-500',
+    task: 'bg-cyan-600 hover:bg-cyan-500',
+    tool: 'bg-purple-600 hover:bg-purple-500',
+    wait: 'bg-indigo-600 hover:bg-indigo-500',
+    output: 'bg-rose-600 hover:bg-rose-500',
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -124,7 +134,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button 
                                 key={type} 
                                 onClick={() => onAddNode(type)} 
-                                className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm font-semibold capitalize transition-colors"
+                                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold capitalize transition-colors text-white ${nodeButtonColors[type]}`}
                             >
                                 <span className="text-lg">{nodeButtonConfig[type]}</span>
                                 <span>{type}</span>

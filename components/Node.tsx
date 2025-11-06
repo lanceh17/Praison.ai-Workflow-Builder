@@ -11,7 +11,7 @@ interface NodeComponentProps {
   node: Node;
   isSelected: boolean;
   onHandleMouseDown: (e: React.MouseEvent) => void;
-  sourceNodeForDrawing: Node | null;
+  isTargetHighlight: boolean;
 }
 
 const nodeConfig: { [key in NodeTypeString]: { icon: React.FC<any>; emoji: string; color: string; bgColor: string; borderColor: string; } } = {
@@ -23,7 +23,7 @@ const nodeConfig: { [key in NodeTypeString]: { icon: React.FC<any>; emoji: strin
   wait: { icon: WaitIcon, emoji: '⏳', color: 'text-indigo-300', bgColor: 'bg-indigo-900/50', borderColor: 'border-indigo-500' },
 };
 
-const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandleMouseDown, sourceNodeForDrawing }) => {
+const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandleMouseDown, isTargetHighlight }) => {
   const { icon: Icon, emoji, color, bgColor, borderColor } = nodeConfig[node.type];
   
   const selectionClass = isSelected ? `ring-2 ring-offset-2 ring-offset-slate-900 ring-yellow-400` : 'border-slate-600';
@@ -48,30 +48,8 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
     }
   };
   
-  const isConnectableTarget = (targetNode: Node) => {
-    if (!sourceNodeForDrawing) return false;
-    // Fix: Corrected typo from 'sourceNodeFordrawing' to 'sourceNodeForDrawing'.
-    const source = sourceNodeForDrawing;
-    
-    if (source.id === targetNode.id) return false;
-
-    switch (source.type) {
-        case 'trigger':
-            return targetNode.type === 'task' || targetNode.type === 'wait';
-        case 'agent':
-            return targetNode.type === 'task';
-        case 'task':
-        case 'wait':
-            return targetNode.type === 'task' || targetNode.type === 'output' || targetNode.type === 'wait';
-        case 'tool':
-            return targetNode.type === 'agent';
-        default:
-            return false;
-    }
-  };
-
-  const isTargetHighlight = sourceNodeForDrawing && isConnectableTarget(node);
-  const showInput = node.type === 'agent' || node.type === 'task' || node.type === 'output' || node.type === 'wait';
+  const showInput = node.type === 'task' || node.type === 'output' || node.type === 'wait';
+  const showToolInput = node.type === 'agent';
   const showOutput = node.type !== 'output';
 
 
@@ -96,6 +74,14 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
         <div 
           data-handle-pos="left"
           className={`absolute top-1/2 -left-2 w-4 h-4 -translate-y-1/2 bg-slate-600 rounded-full border-2 border-slate-900 transition-all ${isTargetHighlight ? 'bg-green-400 scale-125' : 'hover:bg-cyan-400'}`}
+          style={{ zIndex: 10 }}
+        />
+      )}
+      {/* Bottom (tool target for agents) */}
+      {showToolInput && (
+        <div 
+          data-handle-pos="bottom"
+          className={`absolute -bottom-2 left-1/2 w-4 h-4 -translate-x-1/2 bg-slate-600 rounded-full border-2 border-slate-900 transition-all ${isTargetHighlight ? 'bg-green-400 scale-125' : 'hover:bg-cyan-400'}`}
           style={{ zIndex: 10 }}
         />
       )}

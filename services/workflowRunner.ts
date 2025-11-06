@@ -21,6 +21,7 @@ export class WorkflowRunner {
     private isRunning: boolean = false;
     private timeoutId: number | null = null;
     private taskOutputs: Map<string, string> = new Map();
+    private initialInput: string | null = null;
 
     constructor(nodes: Node[], edges: Edge[], config: WorkflowConfig, logCallback: LogCallback) {
         this.nodes = nodes;
@@ -32,6 +33,10 @@ export class WorkflowRunner {
     private log(type: LogEntry['type'], message: string) {
         this.logCallback({ type, message, timestamp: getCurrentTimestamp() });
     }
+    
+    public setInitialInput(message: string) {
+        this.initialInput = message;
+    }
 
     private getAgentForTask(taskId: string): AgentNode | undefined {
         const agentEdge = this.edges.find(e => e.target === taskId && this.nodes.find(n => n.id === e.source)?.type === 'agent');
@@ -40,59 +45,60 @@ export class WorkflowRunner {
     }
 
     private getTopologicalOrder(): SequenceNode[] {
-        const sequenceNodes = this.nodes.filter(n => n.type === 'task' || n.type === 'wait') as SequenceNode[];
+        const sequenceNodes = this.nodes.filter(
+            n => n.type === 'task' || n.type === 'wait'
+        ) as SequenceNode[];
+        
         const adj: { [key: string]: string[] } = {};
-        const inDegree: { [key: string]: number } = {};
+        const inDegree: { [key:string]: number } = {};
+        const nodeMap = new Map<string, SequenceNode>(sequenceNodes.map(n => [n.id, n]));
 
+        // Initialize adjacency list and in-degree map
         sequenceNodes.forEach(node => {
             adj[node.id] = [];
             inDegree[node.id] = 0;
         });
 
+        // Build the graph and in-degrees from edges between sequence nodes
         this.edges.forEach(edge => {
-            const source = this.nodes.find(n => n.id === edge.source);
-            const target = this.nodes.find(n => n.id === edge.target);
-            const isSourceSequence = source?.type === 'task' || source?.type === 'wait' || source?.type === 'trigger';
-            const isTargetSequence = target?.type === 'task' || target?.type === 'wait';
-            
-            if (source && target && isSourceSequence && isTargetSequence) {
-                adj[source.id] = adj[source.id] || [];
-                adj[source.id].push(target.id);
-                inDegree[target.id]++;
+            const sourceExists = nodeMap.has(edge.source);
+            const targetExists = nodeMap.has(edge.target);
+
+            if (sourceExists && targetExists) {
+                adj[edge.source].push(edge.target);
+                inDegree[edge.target]++;
             }
         });
 
-        // Trigger nodes provide the starting points
-        const triggerEdges = this.edges.filter(e => this.nodes.find(n => n.id === e.source)?.type === 'trigger');
-        triggerEdges.forEach(edge => {
-             const targetNode = sequenceNodes.find(n => n.id === edge.target);
-             // Start from triggers, but don't assume inDegree is 0
-        });
-
-        const queue = sequenceNodes.filter(node => inDegree[node.id] === 0);
+        // Initialize the queue with nodes that have an in-degree of 0
+        const queue: SequenceNode[] = sequenceNodes.filter(node => inDegree[node.id] === 0);
         const order: SequenceNode[] = [];
 
         while (queue.length > 0) {
-            const current = queue.shift()!;
-            order.push(current);
+            const currentNode = queue.shift()!;
+            order.push(currentNode);
 
-            this.edges.forEach(edge => {
-                if(edge.source === current.id) {
-                    const neighbor = sequenceNodes.find(n => n.id === edge.target);
-                    if (neighbor) {
-                        inDegree[neighbor.id]--;
-                        if(inDegree[neighbor.id] === 0) {
-                            queue.push(neighbor);
-                        }
+            // For each neighbor, decrement its in-degree
+            adj[currentNode.id]?.forEach(neighborId => {
+                inDegree[neighborId]--;
+                if (inDegree[neighborId] === 0) {
+                    const neighborNode = nodeMap.get(neighborId);
+                    if (neighborNode) {
+                        queue.push(neighborNode);
                     }
                 }
             });
         }
-        
+
         if (order.length !== sequenceNodes.length) {
-            this.log('error', 'Cycle detected in workflow graph. Cannot determine execution order.');
+            const cycleNodes = sequenceNodes
+                .filter(n => inDegree[n.id] > 0)
+                .map(n => `"${n.label}"`)
+                .join(', ');
+            this.log('error', `Cycle detected in workflow graph involving nodes: ${cycleNodes}. Cannot determine execution order.`);
             return []; // Cycle detected
         }
+
         return order;
     }
     
@@ -108,12 +114,20 @@ export class WorkflowRunner {
             if (incomingEdge) {
                 const sourceTaskOutput = this.taskOutputs.get(incomingEdge.source);
                 if (sourceTaskOutput !== undefined) {
-                    const { type, filename } = outputNode.data;
+                    const { type, filename, url } = outputNode.data;
                     let message = '';
-                    if (type === 'SaveToFile') {
-                        message = `(Save to File: ${filename || 'output.txt'}): ${sourceTaskOutput}`;
-                    } else {
-                        message = `(Display): ${sourceTaskOutput}`;
+                    switch (type) {
+                        case 'SaveToFile':
+                            message = `(Save to File: ${filename || 'output.txt'}): ${sourceTaskOutput}`;
+                            break;
+                        case 'Webhook':
+                            this.log('info', `Simulating POST request to ${url || 'Not configured'}.`);
+                            message = `(Webhook to ${url || 'N/A'}): ${sourceTaskOutput}`;
+                            break;
+                        case 'Display':
+                        default:
+                            message = `(Display): ${sourceTaskOutput}`;
+                            break;
                     }
                     this.log('output', message);
                 } else {
@@ -134,7 +148,7 @@ export class WorkflowRunner {
         const orderedSequence = this.getTopologicalOrder();
 
         if (orderedSequence.length === 0 && this.nodes.some(n => n.type === 'task' || n.type === 'wait')) {
-             this.log('error', 'Could not determine execution order. Check for cycles or disconnected nodes.');
+             // Error is logged inside getTopologicalOrder if it fails
              this.isRunning = false;
              return;
         }
@@ -149,6 +163,13 @@ export class WorkflowRunner {
                 if (node.type === 'task') {
                     this.log('info', `Executing task: "${node.label}"...`);
                     await this.sleep(1000);
+                    
+                    // Check for chat input on first task
+                    const isFirstTask = !this.edges.some(e => e.target === node.id && (this.nodes.find(n => n.id === e.source)?.type === 'task' || this.nodes.find(n => n.id === e.source)?.type === 'wait'));
+                    if (isFirstTask && this.initialInput) {
+                        this.log('info', `Using chat input: "${this.initialInput}"`);
+                    }
+
 
                     const agentNode = this.getAgentForTask(node.id);
                     if (agentNode) {
@@ -180,6 +201,7 @@ export class WorkflowRunner {
             this.log('error', `Workflow failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             this.isRunning = false;
+            this.initialInput = null; // Clear chat message after run
         }
     }
 

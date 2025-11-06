@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback, MouseEvent as ReactMouseEvent, useEffect } from 'react';
 import { Node, Edge, Point } from '../types';
 import NodeComponent from './Node';
@@ -25,17 +24,61 @@ const getEdgePath = (sourceNode: Node, targetNode: Node): string => {
     x: sourceNode.position.x + nodeWidth,
     y: sourceNode.position.y + nodeHeight / 2
   };
-  const targetPos = {
-    x: targetNode.position.x,
-    y: targetNode.position.y + nodeHeight / 2
-  };
+  
+  let targetPos: Point;
+  const isToolToAgent = sourceNode.type === 'tool' && targetNode.type === 'agent';
 
-  const c1x = sourcePos.x + Math.abs(targetPos.x - sourcePos.x) * 0.5;
-  const c1y = sourcePos.y;
-  const c2x = targetPos.x - Math.abs(targetPos.x - sourcePos.x) * 0.5;
-  const c2y = targetPos.y;
+  if (isToolToAgent) {
+    targetPos = {
+      x: targetNode.position.x + nodeWidth / 2,
+      y: targetNode.position.y + nodeHeight
+    };
+  } else {
+    targetPos = {
+      x: targetNode.position.x,
+      y: targetNode.position.y + nodeHeight / 2
+    };
+  }
+
+  const dx = targetPos.x - sourcePos.x;
+  const dy = targetPos.y - sourcePos.y;
+
+  let c1x, c1y, c2x, c2y;
+
+  if (isToolToAgent) {
+    // Curve for side-to-bottom connections
+    c1x = sourcePos.x + dx * 0.5;
+    c1y = sourcePos.y;
+    c2x = targetPos.x;
+    c2y = targetPos.y - dy * 0.5;
+  } else {
+    // Standard side-to-side connection
+    c1x = sourcePos.x + Math.abs(dx) * 0.5;
+    c1y = sourcePos.y;
+    c2x = targetPos.x - Math.abs(dx) * 0.5;
+    c2y = targetPos.y;
+  }
+
 
   return `M ${sourcePos.x} ${sourcePos.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${targetPos.x} ${targetPos.y}`;
+};
+
+const isConnectionValid = (sourceNode: Node, targetNode: Node): boolean => {
+    if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) return false;
+
+    switch (sourceNode.type) {
+        case 'trigger':
+            return targetNode.type === 'task' || targetNode.type === 'wait';
+        case 'agent':
+            return targetNode.type === 'task';
+        case 'task':
+        case 'wait':
+            return targetNode.type === 'task' || targetNode.type === 'output' || targetNode.type === 'wait';
+        case 'tool':
+            return targetNode.type === 'agent';
+        default:
+            return false;
+    }
 };
 
 
@@ -118,16 +161,19 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
     if (dragState?.type === 'draw_edge') {
-      const target = e.target as HTMLElement;
-      const targetHandle = target.closest('[data-handle-pos="left"]');
-      const targetNodeEl = target.closest('[data-node-id]');
-      if (targetHandle && targetNodeEl) {
-        const sourceId = dragState.id;
-        const targetId = targetNodeEl.getAttribute('data-node-id');
-        if (sourceId && targetId && sourceId !== targetId) {
-          onConnect(sourceId, targetId);
+        const target = e.target as HTMLElement;
+        const targetNodeEl = target.closest('[data-node-id]');
+
+        if (targetNodeEl) {
+            const sourceId = dragState.id;
+            const targetId = targetNodeEl.getAttribute('data-node-id');
+            const sourceNode = nodes.find(n => n.id === sourceId);
+            const targetNode = nodes.find(n => n.id === targetId);
+
+            if (sourceNode && targetNode && isConnectionValid(sourceNode, targetNode)) {
+                onConnect(sourceNode.id, targetNode.id);
+            }
         }
-      }
     }
     
     if (dragState?.type === 'pan' && canvasRef.current) {
@@ -136,7 +182,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     setDragState(null);
     setDrawingEdgeEnd(null);
-  }, [dragState, onConnect]);
+  }, [dragState, onConnect, nodes]);
 
   useEffect(() => {
     if (!dragState) return;
@@ -184,22 +230,25 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`, transformOrigin: 'top left' }}
       >
         {/* Render nodes */}
-        {nodes.map(node => (
-          <div
-            key={node.id}
-            data-node-id={node.id}
-            className="absolute"
-            style={{ transform: `translate(${node.position.x}px, ${node.position.y}px)`, cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
-          >
-            <NodeComponent
-              node={node}
-              isSelected={selectedNodeId === node.id}
-              onHandleMouseDown={(e) => { /* handled by parent */ }}
-              sourceNodeForDrawing={sourceNodeForDrawing}
-            />
-          </div>
-        ))}
+        {nodes.map(node => {
+          const isTargetHighlight = sourceNodeForDrawing ? isConnectionValid(sourceNodeForDrawing, node) : false;
+          return (
+            <div
+              key={node.id}
+              data-node-id={node.id}
+              className="absolute"
+              style={{ transform: `translate(${node.position.x}px, ${node.position.y}px)`, cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
+            >
+              <NodeComponent
+                node={node}
+                isSelected={selectedNodeId === node.id}
+                onHandleMouseDown={(e) => { /* handled by parent */ }}
+                isTargetHighlight={isTargetHighlight}
+              />
+            </div>
+          );
+        })}
       </div>
       
       {/* SVG for edges */}
