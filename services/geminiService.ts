@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Workflow, Node, Edge, NodeType } from '../types';
 
@@ -58,37 +57,20 @@ const workflowSchema = {
 
 
 const generateSystemInstruction = (existingWorkflow: Workflow) => `
-You are an expert at designing Praison.ai workflows. Your task is to take a user's prompt and convert it into a structured JSON object representing a workflow graph. The JSON output must strictly adhere to the provided schema.
+You are an AI expert specializing in creating Praison.ai workflow graphs in JSON format. Your task is to convert a user's prompt into a valid JSON object containing nodes and edges that represent a logical workflow. The output must strictly follow the provided schema.
 
-**Node Generation Rules:**
-- For a node with \`type: 'agent'\`, its \`data\` object **MUST** contain three non-empty string properties:
-    - \`role\`: A descriptive title for the agent (e.g., "Senior Research Analyst").
-    - \`goal\`: A concise, action-oriented sentence defining the agent's primary objective. (e.g., "Efficiently gather, analyze, and synthesize information on specified topics.")
-    - \`backstory\`: A creative, one-sentence narrative giving the agent context and personality. (e.g., "An experienced analyst with a knack for uncovering deep insights.")
-- For a node with \`type: 'task'\`, its \`data\` object **MUST** contain:
-    - \`description\`: A clear description of what the task entails.
-    - \`expected_output\`: A description of the task's deliverable.
+**Core Task:**
+- Analyze the user's prompt to determine the necessary agents, tasks, tools, and their connections.
+- Construct a workflow starting with a 'trigger' and ending with an 'output'.
 
-**General Instructions:**
-1.  Create a logical flow starting from exactly one 'trigger' node.
-2.  Analyze the user's prompt to identify agents, tasks, and their relationships.
-3.  Assign agents to tasks by creating an edge from the agent to the task.
-4.  If tools are mentioned (like 'search'), create a 'tool' node and link it to the relevant agent.
-5.  Structure the sequence of tasks correctly using edges.
-6.  End the workflow with an 'output' node.
-7.  Generate unique, descriptive IDs for all nodes and edges (e.g., 'agent-researcher', 'task-write-report', 'e-researcher-to-task').
-8.  Do not create nodes with positions.
-9.  If the user provides an existing workflow, modify or add to it. If it's empty, create a new one.
+**Crucial Rule for 'agent' nodes:**
+- When you create an 'agent' node, its 'data' object **MUST** include a 'role', 'goal', and 'backstory'. These fields must be populated with relevant, non-empty strings based on the agent's function in the workflow.
 
-**Edge Rules (Important!):**
-- Edges connect nodes. 'source' is the node ID where the edge starts, 'target' is where it ends.
-- 'trigger' -> 'task' or 'wait'
-- 'agent' -> 'task' (An agent is assigned to a task)
-- 'tool' -> 'agent' (A tool is given to an agent)
-- 'task' -> 'task', 'wait', or 'output' (Defines the sequence of operations)
-- 'wait' -> 'task', 'wait', or 'output'
+**Edge Logic:**
+- Connect nodes logically. For example: an agent connects to a task it performs, a tool connects to an agent that uses it, and tasks connect to each other to show sequence.
 
-Existing workflow structure (for context):
+**Context:**
+- Here is the existing workflow, if any. Modify or add to it as needed:
 ${JSON.stringify(existingWorkflow, null, 2)}
 `;
 
@@ -189,58 +171,44 @@ Now, provide 3 new suggestions based on these instructions.`;
 };
 
 export const expandPrompt = async (prompt: string): Promise<string> => {
-    const systemInstruction = `You are an expert AI workflow designer. Your task is to take a user's simple concept and expand it into a sophisticated, detailed prompt for creating a multi-agent workflow. The goal is to provide a rich, imaginative scenario that can be used to generate a complex and useful workflow graph.
+    const systemInstruction = `You are an expert AI workflow designer. Your task is to take a user's simple concept and expand it into a CONCISE and PUNCHY prompt for creating a multi-agent workflow. The output should be brief and easy to read.
 
-Follow this structure for your output, using Markdown for formatting:
+**RULES:**
+- **BE BRIEF.** The entire output should be short.
+- Use Markdown for formatting.
+- Do not use more than 3 agents.
+- For each agent, provide only a **one-sentence description** of its role and primary task.
+- Do NOT include sections for "Key Responsibilities" or "Example Task".
 
-### **Expanded Prompt: [Give the workflow a creative and descriptive name]**
+Follow this **strict** structure:
 
-**1. Overall Goal:**
-Write a concise paragraph explaining the high-level objective and value of the workflow.
+### **[Creative Workflow Name]**
 
-**2. Agentic Workflow Breakdown:**
-This is the most important section. Identify and describe 3 to 5 key, specialized agents. For each agent, provide:
-*   **Role:** A clear, one-sentence description of the agent's purpose.
-*   **Key Responsibilities:** A brief bulleted list (2-3 points) of its main tasks.
-*   **Example Task:** A single, concrete example of a task it would perform.
+**Goal:** A single, concise sentence explaining the workflow's objective.
 
-**3. Inter-Agent Communication:**
-Briefly describe how the agents would interact (e.g., passing data, sequential execution).
+**Agents:**
+- **[Agent 1 Name]:** A single sentence describing its role.
+- **[Agent 2 Name]:** A single sentence describing its role.
+- **[Agent 3 Name]:** A single sentence describing its role.
+
+**Flow:** A very brief (max 10 words) description of how they work together (e.g., "Profiler finds leads, Writer crafts the email.").
 
 ---
-**EXAMPLE FOR STYLE AND TONE (DO NOT COPY):**
-If the user prompt is "social media tracker", a good expansion would be:
+**EXAMPLE (Follow this style):**
 
-### **Expanded Prompt: The "OmniPulse Social Intelligence Network"**
+### **Social Media Intelligence Network**
 
-**1. Overall Goal:**
-To create an autonomous social media intelligence network that provides real-time analysis, trend prediction, and strategic recommendations for a marketing agency's clients. It moves beyond simple tracking to offer actionable insights.
+**Goal:** To autonomously track social media, analyze trends, and report key insights.
 
-**2. Agentic Workflow Breakdown:**
-*   **Data Harvester Agent**
-    *   **Role:** Gathers raw social media data from various platforms based on client-specific keywords and accounts.
-    *   **Key Responsibilities:**
-        *   Connect to social media APIs (e.g., Twitter, Reddit).
-        *   Filter data based on keywords, hashtags, and user accounts.
-    *   **Example Task:** Pull all tweets from the last 24 hours mentioning "#artisancoffee".
-*   **Content Analyst Agent**
-    *   **Role:** Processes raw data to extract meaningful information using natural language processing.
-    *   **Key Responsibilities:**
-        *   Perform sentiment analysis (positive, negative, neutral).
-        *   Identify key topics, entities, and trends.
-    *   **Example Task:** Analyze a tweet to determine sentiment is "delighted" and tag it as "product feedback".
-*   **Strategy & Reporting Agent**
-    *   **Role:** Synthesizes insights into actionable recommendations and client-ready reports.
-    *   **Key Responsibilities:**
-        *   Generate suggestions for content topics based on trends.
-        *   Create weekly summary reports with key metrics and visualizations.
-    *   **Example Task:** Generate a weekly report showing brand sentiment and suggest a content campaign around "cold brew".
+**Agents:**
+- **Data Harvester:** Gathers raw social media posts based on keywords.
+- **Content Analyst:** Analyzes posts for sentiment and key topics.
+- **Reporting Agent:** Summarizes the findings into a daily report.
 
-**3. Inter-Agent Communication:**
-The Data Harvester feeds raw data to the Content Analyst. The Analyst's structured data is then used by the Strategy & Reporting Agent to create the final output. The process is sequential.
+**Flow:** Data is harvested, then analyzed, then summarized into a report.
 ---
 
-Now, take the user's prompt and generate a similar expansion. Be creative, professional, and focus on creating a plausible and interesting workflow. Keep the total length reasonable and focused on the core components.
+Now, take the user's prompt and generate a similarly brief and concise expansion.
 `;
     
     const response = await ai.models.generateContent({
