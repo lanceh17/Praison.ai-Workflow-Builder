@@ -1,0 +1,5 @@
+{
+  "name": "Praison.ai No-Code Workflow Builder",
+  "description": "A visual, no-code workflow builder to design and configure Praison.ai agentic workflows. Build your agent and task structure visually, then generate the corresponding praison.yaml configuration file using the Gemini API.",
+  "requestFramePermissions": []
+}
