@@ -1,6 +1,6 @@
 // Fix: Implement the PropertiesPanel component to view and edit node/edge details.
 import React from 'react';
-import { Node, Edge, AgentNodeData, TaskNodeData, ToolNodeData, TriggerNodeData } from '../types';
+import { Node, Edge, AgentNodeData, TaskNodeData, ToolNodeData, TriggerNodeData, OutputNodeData, OutputType } from '../types';
 
 interface PropertiesPanelProps {
   selectedNode: Node | null;
@@ -57,6 +57,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         )}
         {selectedNode.type === 'trigger' && (
           <TriggerProperties data={data as TriggerNodeData} onChange={handleDataChange} />
+        )}
+        {selectedNode.type === 'output' && (
+            <OutputProperties data={data as OutputNodeData} onChange={handleDataChange} />
         )}
         
         <button
@@ -137,6 +140,18 @@ const TriggerProperties: React.FC<{ data: TriggerNodeData; onChange: (f: string,
             {/* FIX: Add 'Chat' as a selectable trigger type. */}
             <option value="Chat">Chat</option>
         </Select>
+    </div>
+);
+
+const OutputProperties: React.FC<{ data: OutputNodeData; onChange: (f: string, v: any) => void }> = ({ data, onChange }) => (
+    <div className="space-y-4">
+        <Select id="type" label="Output Type" value={data.type} onChange={(f, v) => onChange(f, v as OutputType)}>
+            <option value="Display">Display in UI</option>
+            <option value="SaveToFile">Save to File</option>
+        </Select>
+        {data.type === 'SaveToFile' && (
+            <Input id="filename" label="Filename" value={data.filename || ''} onChange={onChange} />
+        )}
     </div>
 );
 

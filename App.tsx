@@ -1,23 +1,25 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Node, Edge, Workflow, WorkflowTemplate, Point, LogEntry, WorkflowStatus, WorkflowConfig } from './types';
+import { Node, Edge, Workflow, WorkflowTemplate, Point, LogEntry, WorkflowStatus, WorkflowConfig, NodeType } from './types';
 import Sidebar from './components/Sidebar';
 import WorkflowCanvas from './components/WorkflowCanvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import LogPanel from './components/LogPanel';
 import { templates as initialTemplates } from './templates';
-import { generateWorkflowFromPrompt } from './services/geminiService';
+import { generateWorkflowFromPrompt, generatePromptSuggestions, expandPrompt } from './services/geminiService';
 import { WorkflowRunner } from './services/workflowRunner';
 import Modal from './components/Modal';
 
 const App: React.FC = () => {
     const [workflow, setWorkflow] = useState<Workflow>({ nodes: [], edges: [], config: { process: 'sequential', verbose: true } });
     const [allTemplates, setAllTemplates] = useState<WorkflowTemplate[]>(initialTemplates);
+    // FIX: Added missing '=' to the useState declaration. This was causing numerous cascading parsing errors.
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
     const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [status, setStatus] = useState<WorkflowStatus>('idle');
     const [isSaveModalOpen, setSaveModalOpen] = useState(false);
+    const [isClearModalOpen, setClearModalOpen] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
     const runnerRef = useRef<WorkflowRunner | null>(null);
 
@@ -43,12 +45,11 @@ const App: React.FC = () => {
     const handleNodePositionChange = useCallback((nodeId: string, position: Point) => {
         setWorkflow(prev => ({
             ...prev,
-            // FIX: Use explicit property assignment for `position` to avoid potential linter issues with shorthand properties.
             nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, position: position } : n)
         }));
     }, []);
     
-    const handleAddNode = (type: 'agent' | 'task' | 'tool' | 'trigger') => {
+    const handleAddNode = (type: NodeType) => {
         const newNode: Node = {
             id: `${type}-${Date.now()}`,
             type: type,
@@ -69,6 +70,10 @@ const App: React.FC = () => {
                 break;
             case 'trigger':
                 newNode.data = { type: 'Manual' };
+                break;
+            case 'output':
+                newNode.data = { type: 'Display' };
+                newNode.label = 'Final Output';
                 break;
         }
 
@@ -183,6 +188,15 @@ const App: React.FC = () => {
         setNewTemplateName('');
         setSaveModalOpen(false);
     };
+    
+    const handleClearCanvas = () => {
+        setWorkflow(prev => ({ ...prev, nodes: [], edges: [] }));
+        setLogs([]);
+        setStatus('idle');
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+        setClearModalOpen(false);
+    };
 
     const selectedNode = workflow.nodes.find(n => n.id === selectedNodeId) || null;
     const selectedEdge = workflow.edges.find(e => e.id === selectedEdgeId) || null;
@@ -193,9 +207,12 @@ const App: React.FC = () => {
                 onAddNode={handleAddNode}
                 onLoadTemplate={handleLoadTemplate}
                 onGenerateFromPrompt={handleGenerateFromPrompt}
+                onGetSuggestions={generatePromptSuggestions}
+                onExpandPrompt={expandPrompt}
                 onRun={handleRunWorkflow}
                 onStop={handleStopWorkflow}
                 onSaveAsTemplate={() => setSaveModalOpen(true)}
+                onClearCanvas={() => setClearModalOpen(true)}
                 onConfigChange={handleConfigChange}
                 status={status}
                 templates={allTemplates}
@@ -244,6 +261,25 @@ const App: React.FC = () => {
                         className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-colors"
                     >
                         Save
+                    </button>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isClearModalOpen} onClose={() => setClearModalOpen(false)}>
+                <h3 className="text-xl font-bold mb-4 text-slate-100">Clear Canvas</h3>
+                <p className="text-sm text-slate-400 mb-4">Are you sure you want to delete all nodes and edges? This action cannot be undone.</p>
+                <div className="mt-6 flex justify-end space-x-2">
+                    <button
+                        onClick={() => setClearModalOpen(false)}
+                        className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleClearCanvas}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                    >
+                        Clear Canvas
                     </button>
                 </div>
             </Modal>

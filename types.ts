@@ -1,5 +1,5 @@
 // Fix: Define all necessary types for the application.
-export type NodeType = 'agent' | 'task' | 'tool' | 'trigger';
+export type NodeType = 'agent' | 'task' | 'tool' | 'trigger' | 'output';
 
 export interface Point {
   x: number;
@@ -54,7 +54,19 @@ export interface TriggerNode extends BaseNode {
   data: TriggerNodeData;
 }
 
-export type Node = AgentNode | TaskNode | ToolNode | TriggerNode;
+export type OutputType = 'Display' | 'SaveToFile';
+
+export interface OutputNodeData {
+    type: OutputType;
+    filename?: string;
+}
+
+export interface OutputNode extends BaseNode {
+    type: 'output';
+    data: OutputNodeData;
+}
+
+export type Node = AgentNode | TaskNode | ToolNode | TriggerNode | OutputNode;
 
 export interface Edge {
   id: string;

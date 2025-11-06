@@ -1,4 +1,4 @@
-import { Node, Edge, WorkflowConfig, LogEntry, TaskNode, AgentNode } from '../types';
+import { Node, Edge, WorkflowConfig, LogEntry, TaskNode, AgentNode, OutputNode } from '../types';
 
 type LogCallback = (log: LogEntry) => void;
 
@@ -18,6 +18,7 @@ export class WorkflowRunner {
     private logCallback: LogCallback;
     private isRunning: boolean = false;
     private timeoutId: number | null = null;
+    private taskOutputs: Map<string, string> = new Map();
 
     constructor(nodes: Node[], edges: Edge[], config: WorkflowConfig, logCallback: LogCallback) {
         this.nodes = nodes;
@@ -77,10 +78,40 @@ export class WorkflowRunner {
         }
         return order;
     }
+    
+    private processOutputs() {
+        const outputNodes = this.nodes.filter(n => n.type === 'output') as OutputNode[];
+        if (outputNodes.length === 0) {
+            this.log('info', 'No output nodes defined. Workflow finished.');
+            return;
+        }
+
+        outputNodes.forEach(outputNode => {
+            const incomingEdge = this.edges.find(e => e.target === outputNode.id);
+            if (incomingEdge) {
+                const sourceTaskOutput = this.taskOutputs.get(incomingEdge.source);
+                if (sourceTaskOutput) {
+                    const { type, filename } = outputNode.data;
+                    let message = '';
+                    if (type === 'SaveToFile') {
+                        message = `(Save to File: ${filename || 'output.txt'}): ${sourceTaskOutput}`;
+                    } else {
+                        message = `(Display): ${sourceTaskOutput}`;
+                    }
+                    this.log('output', message);
+                } else {
+                    this.log('error', `Output node "${outputNode.label}" is connected to a task that produced no output.`);
+                }
+            } else {
+                this.log('error', `Output node "${outputNode.label}" is not connected to any task.`);
+            }
+        });
+    }
 
     public async run() {
         if (this.isRunning) return;
         this.isRunning = true;
+        this.taskOutputs.clear();
         this.log('info', 'Workflow run started.');
 
         const orderedTasks = this.getTopologicalOrder();
@@ -110,9 +141,14 @@ export class WorkflowRunner {
                     continue;
                 }
                 
-                this.log('output', `Task "${task.label}" completed with output: ${task.data.expected_output}`);
+                const output = task.data.expected_output;
+                this.taskOutputs.set(task.id, output);
+                this.log('success', `Task "${task.label}" completed.`);
                 await this.sleep(500);
             }
+
+            this.processOutputs();
+            
             this.log('success', 'Workflow completed successfully.');
         } catch (error) {
             this.log('error', `Workflow failed: ${error instanceof Error ? error.message : String(error)}`);

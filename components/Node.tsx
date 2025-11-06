@@ -1,9 +1,10 @@
 import React from 'react';
-import { Node, NodeType as NodeTypeString, AgentNode, TaskNode, ToolNode, TriggerNode } from '../types';
+import { Node, NodeType as NodeTypeString, AgentNode, TaskNode, ToolNode, TriggerNode, OutputNode } from '../types';
 import { AgentIcon } from './icons/AgentIcon';
 import { TaskIcon } from './icons/TaskIcon';
 import { ToolIcon } from './icons/ToolIcon';
 import { TriggerIcon } from './icons/TriggerIcon';
+import { OutputIcon } from './icons/OutputIcon';
 
 interface NodeComponentProps {
   node: Node;
@@ -17,6 +18,7 @@ const nodeConfig: { [key in NodeTypeString]: { icon: React.FC<any>; color: strin
   task: { icon: TaskIcon, color: 'text-cyan-300', bgColor: 'bg-cyan-900/50', borderColor: 'border-cyan-500' },
   tool: { icon: ToolIcon, color: 'text-purple-300', bgColor: 'bg-purple-900/50', borderColor: 'border-purple-500' },
   trigger: { icon: TriggerIcon, color: 'text-green-300', bgColor: 'bg-green-900/50', borderColor: 'border-green-500' },
+  output: { icon: OutputIcon, color: 'text-rose-300', bgColor: 'bg-rose-900/50', borderColor: 'border-rose-500' },
 };
 
 const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandleMouseDown, sourceNodeForDrawing }) => {
@@ -35,6 +37,8 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
         return data.name || 'No tool selected';
       case 'trigger':
         return data.type || 'No type selected';
+      case 'output':
+        return data.type === 'SaveToFile' ? `Save to ${data.filename || 'file'}` : 'Display in UI';
       default:
         return '';
     }
@@ -52,7 +56,7 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
         case 'agent':
             return targetNode.type === 'task';
         case 'task':
-            return targetNode.type === 'task';
+            return targetNode.type === 'task' || targetNode.type === 'output';
         case 'tool':
             return targetNode.type === 'agent';
         default:
@@ -61,6 +65,9 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
   };
 
   const isTargetHighlight = sourceNodeForDrawing && isConnectableTarget(node);
+  const showInput = node.type === 'agent' || node.type === 'task' || node.type === 'output';
+  const showOutput = node.type !== 'output';
+
 
   return (
     <div
@@ -77,18 +84,22 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
       </div>
       
       {/* Left (target) */}
-      <div 
-        data-handle-pos="left"
-        className="absolute top-1/2 -left-2 w-4 h-4 -translate-y-1/2 bg-slate-600 rounded-full border-2 border-slate-900 hover:bg-cyan-400"
-        style={{ zIndex: 10 }}
-      />
+      {showInput && (
+        <div 
+          data-handle-pos="left"
+          className="absolute top-1/2 -left-2 w-4 h-4 -translate-y-1/2 bg-slate-600 rounded-full border-2 border-slate-900 hover:bg-cyan-400"
+          style={{ zIndex: 10 }}
+        />
+      )}
       {/* Right (source) */}
-      <div
-        data-handle-pos="right"
-        className="absolute top-1/2 -right-2 w-4 h-4 -translate-y-1/2 bg-slate-600 rounded-full border-2 border-slate-900 hover:bg-cyan-400"
-        style={{ zIndex: 10, cursor: 'crosshair' }}
-        onMouseDown={onHandleMouseDown}
-      />
+      {showOutput && (
+        <div
+          data-handle-pos="right"
+          className="absolute top-1/2 -right-2 w-4 h-4 -translate-y-1/2 bg-slate-600 rounded-full border-2 border-slate-900 hover:bg-cyan-400"
+          style={{ zIndex: 10, cursor: 'crosshair' }}
+          onMouseDown={onHandleMouseDown}
+        />
+      )}
     </div>
   );
 };
