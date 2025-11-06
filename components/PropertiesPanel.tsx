@@ -157,11 +157,35 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         );
       case 'tool':
         const toolData = formData as ToolNode['data'];
+        
+        const handleToolChange = (newValue: string) => {
+            const newToolData: ToolNode['data'] = { name: newValue };
+            if (newValue === 'file_writer') {
+                newToolData.filename = 'output.txt';
+                newToolData.content = 'Hello, Praison!';
+            } else if (newValue === 'file_reader') {
+                newToolData.filename = 'input.txt';
+            }
+            // Immediately update the app state
+            onUpdateNode(node.id, newToolData, label);
+        };
+
         return (
           <>
             {commonFields}
             <div className="space-y-4">
-              <SelectField label="Tool Name" value={toolData.name} onChange={v => { handleDataChange('name', v); handleSave(); }} options={commonTools} allowCustom />
+              <SelectField label="Tool Name" value={toolData.name} onChange={handleToolChange} options={commonTools} allowCustom />
+              
+              {toolData.name === 'file_writer' && (
+                <>
+                  <InputField label="Filename" value={toolData.filename || ''} onChange={v => handleDataChange('filename', v)} onSave={handleSave} />
+                  <TextAreaField label="Content" value={toolData.content || ''} onChange={v => handleDataChange('content', v)} onSave={handleSave} rows={5} />
+                </>
+              )}
+
+              {toolData.name === 'file_reader' && (
+                <InputField label="Filename" value={toolData.filename || ''} onChange={v => handleDataChange('filename', v)} onSave={handleSave} />
+              )}
             </div>
           </>
         );
@@ -204,7 +228,19 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         return (
             <>
                 {commonFields}
-                <InputField type="number" label="Duration (seconds)" value={String(waitData.duration)} onChange={v => handleDataChange('duration', Number(v))} onSave={handleSave}/>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-400 mb-1">Duration: {waitData.duration}s</label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="120"
+                        step="1"
+                        value={waitData.duration}
+                        onChange={e => handleDataChange('duration', Number(e.target.value))}
+                        onMouseUp={handleSave}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                </div>
             </>
         );
       default:

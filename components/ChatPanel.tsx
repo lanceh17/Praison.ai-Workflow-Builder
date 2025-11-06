@@ -40,7 +40,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onSendMessage }) => {
           <button
             onClick={handleSend}
             disabled={!message.trim()}
-            className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-md transition-colors"
+            className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:bg-teal-900 disabled:text-slate-400 text-white font-bold py-2 px-4 rounded-md transition-colors"
           >
             Send
           </button>

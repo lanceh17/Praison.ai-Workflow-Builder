@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Workflow, Node, Edge, NodeType } from '../types';
 
@@ -24,10 +25,12 @@ const nodeSchema = {
                 expected_output: { type: Type.STRING, description: "The expected output of the task." },
                 // Tool
                 name: { type: Type.STRING, description: "The name of the tool." },
+                filename: { type: Type.STRING, description: "For file tools, the name of the file." },
+                content: { type: Type.STRING, description: "For the file_writer tool, the content to write." },
                 // Trigger
                 type: { type: Type.STRING, enum: ['Manual', 'Schedule', 'Webhook', 'Chat'], description: "The type of trigger." },
                 // Output
-                filename: { type: Type.STRING, description: "The filename for 'SaveToFile' output type." },
+                // `filename` is already here for output, so no need to repeat
                 // Wait
                 duration: { type: Type.NUMBER, description: "The wait duration in seconds." }
             }
@@ -234,7 +237,15 @@ The JSON input will contain nodes and edges.
 - Edges from tools to agents mean that tool is available to that agent.
 - Edges between tasks define dependencies. The target task depends on the source task.
 
-Based on the provided JSON, generate the YAML output with two main sections: 'framework' and 'agents'.
+**Tool Argument Handling (VERY IMPORTANT):**
+- Some 'tool' nodes have specific data like 'filename' or 'content'.
+- When an agent is assigned a task, and that agent uses a configured tool, you **MUST** incorporate the tool's arguments into the task's 'description'.
+- This makes the task description explicit and actionable for the agent.
+
+**Example:**
+- An agent has a 'file_writer' tool with 'filename: "report.md"' and 'content: "AI is impactful."'.
+- The agent is assigned a task with a generic description like "Write the report".
+- You MUST rewrite the task description to be specific: "Using the file writer tool, write the following content to a file named 'report.md': AI is impactful."
 
 **YAML Structure:**
 - The 'framework' section should contain the process type and verbosity from the config.

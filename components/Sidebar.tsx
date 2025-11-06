@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { NodeType, WorkflowTemplate, WorkflowConfig, WorkflowStatus } from '../types';
 import Modal from './Modal'; // Import Modal
@@ -99,11 +98,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div>
                     <h2 className="text-lg font-bold text-slate-100 mb-3 border-b border-slate-700 pb-2">Controls</h2>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={onRun} disabled={status === 'running'} className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 rounded-md font-semibold transition-colors">
+                        <button onClick={onRun} disabled={status === 'running'} className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-teal-900 disabled:text-slate-400 rounded-md font-semibold transition-colors">
                             <span>▶️</span>
                             <span>Run</span>
                         </button>
-                        <button onClick={onStop} disabled={status !== 'running'} className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-600 rounded-md font-semibold transition-colors">
+                        <button onClick={onStop} disabled={status !== 'running'} className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:text-slate-500 rounded-md font-semibold transition-colors">
                             <span>⏹️</span>
                             <span>Stop</span>
                         </button>
@@ -111,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <span>💾</span>
                             <span>Save</span>
                         </button>
-                        <button onClick={onClearCanvas} className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md font-semibold transition-colors">
+                        <button onClick={onClearCanvas} className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded-md font-semibold transition-colors">
                             <span>🗑️</span>
                             <span>Clear</span>
                         </button>
@@ -146,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {/* Templates */}
                  <div>
                     <h2 className="text-lg font-bold text-slate-100 mb-3 border-b border-slate-700 pb-2">Templates</h2>
-                    <button onClick={() => setIsTemplateModalOpen(true)} className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm font-semibold transition-colors">
+                    <button onClick={() => setIsTemplateModalOpen(true)} className="w-full px-4 py-2 bg-teal-800 hover:bg-teal-700 rounded-md text-sm font-semibold transition-colors">
                         Load a Template...
                     </button>
                 </div>
@@ -188,7 +187,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                          <div 
                             key={template.name} 
                             onClick={() => handleTemplateSelect(template)} 
-                            className="bg-slate-700/80 p-4 rounded-lg cursor-pointer hover:bg-slate-600/80 ring-1 ring-slate-600 hover:ring-cyan-500 transition-all"
+                            className="bg-teal-900/80 p-4 rounded-lg cursor-pointer hover:bg-teal-800/80 ring-1 ring-teal-700 hover:ring-cyan-500 transition-all"
                         >
                             <p className="font-bold text-md text-slate-100">{template.name}</p>
                             <p className="text-sm text-slate-400 mt-1">{template.description}</p>
@@ -212,10 +211,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         />
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={handleGetSuggestions} disabled={isSuggestionsLoading} className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 rounded-md font-semibold transition-colors disabled:bg-slate-600">
+                        <button onClick={handleGetSuggestions} disabled={isSuggestionsLoading} className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 rounded-md font-semibold transition-colors disabled:bg-teal-900 disabled:text-slate-400">
                            {isSuggestionsLoading ? 'Getting...' : 'Get Suggestions'}
                         </button>
-                        <button onClick={handleExpand} disabled={isExpandLoading} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors disabled:bg-slate-600">
+                        <button onClick={handleExpand} disabled={isExpandLoading} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors disabled:bg-teal-900 disabled:text-slate-400">
                            {isExpandLoading ? 'Expanding...' : 'Expand Prompt'}
                         </button>
                     </div>
@@ -228,8 +227,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                     )}
                     <div className="flex justify-end gap-2 border-t border-slate-700 pt-4">
-                        <button onClick={() => setIsGenerateModalOpen(false)} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md font-semibold">Cancel</button>
-                        <button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold disabled:bg-slate-600">
+                        <button onClick={() => setIsGenerateModalOpen(false)} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded-md font-semibold">Cancel</button>
+                        <button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold disabled:bg-teal-900 disabled:text-slate-400">
                            {isGenerating ? 'Generating...' : 'Generate Workflow'}
                         </button>
                     </div>

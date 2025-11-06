@@ -25,7 +25,10 @@ export interface TaskNodeData extends BaseNodeData {
 }
 
 export interface ToolNodeData extends BaseNodeData {
-    name: 'duckduckgo_search' | 'google_search' | 'file_reader' | 'calculator' | string;
+    name: string;
+    // Tool-specific arguments
+    filename?: string;
+    content?: string;
 }
 
 export type TriggerType = 'Manual' | 'Schedule' | 'Webhook' | 'Chat';

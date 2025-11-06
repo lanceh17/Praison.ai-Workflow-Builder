@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import yaml from 'yaml';
@@ -8,6 +6,7 @@ import WorkflowCanvas from './components/WorkflowCanvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import LogPanel from './components/LogPanel';
 import ChatPanel from './components/ChatPanel';
+import OutputPanel from './components/OutputPanel';
 import Modal from './components/Modal';
 import { 
     Node, Edge, Point, Workflow, NodeType, BaseNodeData, WorkflowStatus, 
@@ -52,6 +51,8 @@ const App: React.FC = () => {
     const [newTemplateInfo, setNewTemplateInfo] = useState({ name: '', description: '' });
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [elementToDelete, setElementToDelete] = useState<{ type: 'node' | 'edge', id: string } | null>(null);
+    const [executingNodeId, setExecutingNodeId] = useState<string | null>(null);
+    const [workflowOutput, setWorkflowOutput] = useState<string | null>(null);
     
     const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
     const workflowRunnerRef = useRef<WorkflowRunner | null>(null);
@@ -68,15 +69,17 @@ const App: React.FC = () => {
     };
     
     const handleRun = () => {
+        setWorkflowOutput(null);
         setStatus('running');
-        workflowRunnerRef.current = new WorkflowRunner(nodes, edges, config, (log) => addLog(log));
+        workflowRunnerRef.current = new WorkflowRunner(nodes, edges, config, (log) => addLog(log), setExecutingNodeId, setWorkflowOutput);
         workflowRunnerRef.current.run().finally(() => setStatus('idle'));
     };
     
     const handleSendMessage = (message: string) => {
+        setWorkflowOutput(null);
         addLog({ type: 'info', message: `Chat input received: "${message}"` });
         setStatus('running');
-        workflowRunnerRef.current = new WorkflowRunner(nodes, edges, config, (log) => addLog(log));
+        workflowRunnerRef.current = new WorkflowRunner(nodes, edges, config, (log) => addLog(log), setExecutingNodeId, setWorkflowOutput);
         workflowRunnerRef.current.setInitialInput(message);
         workflowRunnerRef.current.run().finally(() => setStatus('idle'));
     };
@@ -109,8 +112,6 @@ const App: React.FC = () => {
                     if (label !== undefined) {
                         updatedNode.label = label;
                     }
-                    // FIX: Cast the updated node to Node to resolve a TypeScript type inference
-                    // issue with discriminated unions.
                     return updatedNode as Node;
                 }
                 return n;
@@ -118,7 +119,6 @@ const App: React.FC = () => {
         );
     };
 
-    // FIX: Create a handler that accepts a partial config to update state.
     const handleConfigChange = (newConfig: Partial<WorkflowConfig>) => {
         setConfig(prev => ({ ...prev, ...newConfig }));
     };
@@ -164,6 +164,7 @@ const App: React.FC = () => {
         setLogs([]);
         setSelectedNodeId(null);
         setSelectedEdgeId(null);
+        setWorkflowOutput(null);
         setIsClearModalOpen(false);
     };
 
@@ -185,6 +186,7 @@ const App: React.FC = () => {
         setConfig(template.workflow.config);
         setSelectedNodeId(null);
         setSelectedEdgeId(null);
+        setWorkflowOutput(null);
     };
 
     const handleGenerateFromPrompt = async (prompt: string) => {
@@ -266,6 +268,7 @@ const App: React.FC = () => {
                     edges={edges}
                     selectedNodeId={selectedNodeId}
                     selectedEdgeId={selectedEdgeId}
+                    executingNodeId={executingNodeId}
                     onNodeClick={setSelectedNodeId}
                     onEdgeClick={setSelectedEdgeId}
                     onCanvasClick={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
@@ -275,7 +278,7 @@ const App: React.FC = () => {
                     setView={setView}
                 />
                 <div className="absolute bottom-4 right-4 z-10 flex gap-2">
-                    <button onClick={handleExportYaml} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm font-semibold transition-colors shadow-lg">
+                    <button onClick={handleExportYaml} className="px-4 py-2 bg-teal-800 hover:bg-teal-700 rounded-md text-sm font-semibold transition-colors shadow-lg">
                         Export praison.yaml
                     </button>
                 </div>
@@ -283,26 +286,29 @@ const App: React.FC = () => {
             </main>
             
             {/* Right Panel */}
-            {(selectedNode || selectedEdge) && (
-                <PropertiesPanel
-                    node={selectedNode}
-                    edge={selectedEdge}
-                    onUpdateNode={handleUpdateNode}
-                    onDeleteNode={(id) => handleConfirmDelete('node', id)}
-                    onDeleteEdge={(id) => handleConfirmDelete('edge', id)}
-                    onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
-                />
-            )}
-            {isChatActive && !selectedNode && !selectedEdge && (
-                <ChatPanel onSendMessage={handleSendMessage} />
-            )}
+            <div className="flex flex-col">
+                {(selectedNode || selectedEdge) ? (
+                    <PropertiesPanel
+                        node={selectedNode}
+                        edge={selectedEdge}
+                        onUpdateNode={handleUpdateNode}
+                        onDeleteNode={(id) => handleConfirmDelete('node', id)}
+                        onDeleteEdge={(id) => handleConfirmDelete('edge', id)}
+                        onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
+                    />
+                ) : workflowOutput ? (
+                    <OutputPanel output={workflowOutput} onClose={() => setWorkflowOutput(null)} />
+                ) : isChatActive ? (
+                    <ChatPanel onSendMessage={handleSendMessage} />
+                ) : null}
+            </div>
             
             {/* Modals */}
             <Modal isOpen={isClearModalOpen} onClose={() => setIsClearModalOpen(false)}>
                  <h2 className="text-xl font-bold text-white mb-4">Clear Canvas</h2>
                  <p className="text-slate-400 mb-6">Are you sure you want to delete all nodes and edges? This action cannot be undone.</p>
                  <div className="flex justify-end gap-2">
-                    <button onClick={() => setIsClearModalOpen(false)} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md font-semibold">Cancel</button>
+                    <button onClick={() => setIsClearModalOpen(false)} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded-md font-semibold">Cancel</button>
                     <button onClick={handleClearCanvas} className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold">Clear Canvas</button>
                  </div>
             </Modal>
@@ -313,15 +319,15 @@ const App: React.FC = () => {
                      <textarea placeholder="Template Description" value={newTemplateInfo.description} onChange={e => setNewTemplateInfo(p => ({...p, description: e.target.value}))} rows={3} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
                  </div>
                  <div className="flex justify-end gap-2 mt-6">
-                    <button onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md font-semibold">Cancel</button>
-                    <button onClick={handleSaveAsTemplate} disabled={!newTemplateInfo.name.trim()} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold disabled:bg-slate-600">Save Template</button>
+                    <button onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded-md font-semibold">Cancel</button>
+                    <button onClick={handleSaveAsTemplate} disabled={!newTemplateInfo.name.trim()} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold disabled:bg-teal-900 disabled:text-slate-400">Save Template</button>
                  </div>
             </Modal>
              <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
                  <h2 className="text-xl font-bold text-white mb-4">Confirm Deletion</h2>
                  <p className="text-slate-400 mb-6">Are you sure you want to delete this {elementToDelete?.type}? This action cannot be undone.</p>
                  <div className="flex justify-end gap-2">
-                    <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md font-semibold">Cancel</button>
+                    <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded-md font-semibold">Cancel</button>
                     <button onClick={handleDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold">Delete</button>
                  </div>
             </Modal>

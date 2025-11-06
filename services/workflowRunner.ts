@@ -1,6 +1,8 @@
 import { Node, Edge, WorkflowConfig, LogEntry, TaskNode, AgentNode, OutputNode, WaitNode } from '../types';
 
-type LogCallback = (log: LogEntry) => void;
+type LogCallback = (log: Omit<LogEntry, 'timestamp'>) => void;
+type NodeExecutionChangeCallback = (nodeId: string | null) => void;
+type OutputCallback = (output: string) => void;
 
 function getCurrentTimestamp(): string {
     return new Date().toLocaleTimeString('en-US', {
@@ -18,20 +20,31 @@ export class WorkflowRunner {
     private edges: Edge[];
     private config: WorkflowConfig;
     private logCallback: LogCallback;
+    private onNodeExecutionChange: NodeExecutionChangeCallback;
+    private onOutput: OutputCallback;
     private isRunning: boolean = false;
     private timeoutId: number | null = null;
     private taskOutputs: Map<string, string> = new Map();
     private initialInput: string | null = null;
 
-    constructor(nodes: Node[], edges: Edge[], config: WorkflowConfig, logCallback: LogCallback) {
+    constructor(
+        nodes: Node[], 
+        edges: Edge[], 
+        config: WorkflowConfig, 
+        logCallback: LogCallback, 
+        onNodeExecutionChange: NodeExecutionChangeCallback,
+        onOutput: OutputCallback
+    ) {
         this.nodes = nodes;
         this.edges = edges;
         this.config = config;
         this.logCallback = logCallback;
+        this.onNodeExecutionChange = onNodeExecutionChange;
+        this.onOutput = onOutput;
     }
 
     private log(type: LogEntry['type'], message: string) {
-        this.logCallback({ type, message, timestamp: getCurrentTimestamp() });
+        this.logCallback({ type, message });
     }
     
     public setInitialInput(message: string) {
@@ -53,13 +66,11 @@ export class WorkflowRunner {
         const inDegree: { [key:string]: number } = {};
         const nodeMap = new Map<string, SequenceNode>(sequenceNodes.map(n => [n.id, n]));
 
-        // Initialize adjacency list and in-degree map
         sequenceNodes.forEach(node => {
             adj[node.id] = [];
             inDegree[node.id] = 0;
         });
 
-        // Build the graph and in-degrees from edges between sequence nodes
         this.edges.forEach(edge => {
             const sourceExists = nodeMap.has(edge.source);
             const targetExists = nodeMap.has(edge.target);
@@ -70,7 +81,6 @@ export class WorkflowRunner {
             }
         });
 
-        // Initialize the queue with nodes that have an in-degree of 0
         const queue: SequenceNode[] = sequenceNodes.filter(node => inDegree[node.id] === 0);
         const order: SequenceNode[] = [];
 
@@ -78,7 +88,6 @@ export class WorkflowRunner {
             const currentNode = queue.shift()!;
             order.push(currentNode);
 
-            // For each neighbor, decrement its in-degree
             adj[currentNode.id]?.forEach(neighborId => {
                 inDegree[neighborId]--;
                 if (inDegree[neighborId] === 0) {
@@ -96,7 +105,7 @@ export class WorkflowRunner {
                 .map(n => `"${n.label}"`)
                 .join(', ');
             this.log('error', `Cycle detected in workflow graph involving nodes: ${cycleNodes}. Cannot determine execution order.`);
-            return []; // Cycle detected
+            return [];
         }
 
         return order;
@@ -110,6 +119,7 @@ export class WorkflowRunner {
         }
 
         outputNodes.forEach(outputNode => {
+            this.onNodeExecutionChange(outputNode.id);
             const incomingEdge = this.edges.find(e => e.target === outputNode.id);
             if (incomingEdge) {
                 const sourceTaskOutput = this.taskOutputs.get(incomingEdge.source);
@@ -119,23 +129,27 @@ export class WorkflowRunner {
                     switch (type) {
                         case 'SaveToFile':
                             message = `(Save to File: ${filename || 'output.txt'}): ${sourceTaskOutput}`;
+                            this.log('output', message);
                             break;
                         case 'Webhook':
                             this.log('info', `Simulating POST request to ${url || 'Not configured'}.`);
                             message = `(Webhook to ${url || 'N/A'}): ${sourceTaskOutput}`;
+                            this.log('output', message);
                             break;
                         case 'Display':
                         default:
+                            this.onOutput(sourceTaskOutput);
                             message = `(Display): ${sourceTaskOutput}`;
+                            this.log('output', message);
                             break;
                     }
-                    this.log('output', message);
                 } else {
                     this.log('error', `Output node "${outputNode.label}" is connected to a node that produced no output.`);
                 }
             } else {
                 this.log('error', `Output node "${outputNode.label}" is not connected to any task.`);
             }
+            this.sleep(1000);
         });
     }
 
@@ -148,7 +162,6 @@ export class WorkflowRunner {
         const orderedSequence = this.getTopologicalOrder();
 
         if (orderedSequence.length === 0 && this.nodes.some(n => n.type === 'task' || n.type === 'wait')) {
-             // Error is logged inside getTopologicalOrder if it fails
              this.isRunning = false;
              return;
         }
@@ -159,22 +172,24 @@ export class WorkflowRunner {
                     this.log('info', 'Workflow execution was stopped.');
                     return;
                 }
+                
+                this.onNodeExecutionChange(node.id);
 
                 if (node.type === 'task') {
                     this.log('info', `Executing task: "${node.label}"...`);
                     await this.sleep(1000);
                     
-                    // Check for chat input on first task
                     const isFirstTask = !this.edges.some(e => e.target === node.id && (this.nodes.find(n => n.id === e.source)?.type === 'task' || this.nodes.find(n => n.id === e.source)?.type === 'wait'));
                     if (isFirstTask && this.initialInput) {
                         this.log('info', `Using chat input: "${this.initialInput}"`);
                     }
 
-
                     const agentNode = this.getAgentForTask(node.id);
                     if (agentNode) {
+                        this.onNodeExecutionChange(agentNode.id);
                         this.log('info', `Agent "${agentNode.label}" is performing the task.`);
                         await this.sleep(1500);
+                        this.onNodeExecutionChange(node.id);
                     } else {
                         this.log('error', `Task "${node.label}" has no assigned agent. Skipping.`);
                         continue;
@@ -190,7 +205,7 @@ export class WorkflowRunner {
                     this.log('info', `Waiting for ${duration} seconds...`);
                     await this.sleep(duration * 1000);
                     this.log('success', `Wait finished.`);
-                    this.taskOutputs.set(node.id, ''); // Wait nodes produce no output
+                    this.taskOutputs.set(node.id, '');
                 }
             }
 
@@ -201,7 +216,8 @@ export class WorkflowRunner {
             this.log('error', `Workflow failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             this.isRunning = false;
-            this.initialInput = null; // Clear chat message after run
+            this.initialInput = null;
+            this.onNodeExecutionChange(null);
         }
     }
 
@@ -209,6 +225,7 @@ export class WorkflowRunner {
         if (!this.isRunning) return;
         this.log('info', 'Stopping workflow...');
         this.isRunning = false;
+        this.onNodeExecutionChange(null);
         if(this.timeoutId) {
             clearTimeout(this.timeoutId);
             this.timeoutId = null;

@@ -1,12 +1,15 @@
+
 import React, { useState, useRef, useCallback, MouseEvent as ReactMouseEvent, useEffect } from 'react';
 import { Node, Edge, Point } from '../types';
 import NodeComponent from './Node';
+import ParticleBackground from './ParticleBackground';
 
 interface WorkflowCanvasProps {
   nodes: Node[];
   edges: Edge[];
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
+  executingNodeId: string | null;
   onNodeClick: (nodeId: string) => void;
   onEdgeClick: (edgeId: string) => void;
   onCanvasClick: () => void;
@@ -87,6 +90,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   edges,
   selectedNodeId,
   selectedEdgeId,
+  executingNodeId,
   onNodeClick,
   onEdgeClick,
   onCanvasClick,
@@ -220,11 +224,12 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   return (
     <div
       ref={canvasRef}
-      className="flex-1 bg-slate-900/95 relative overflow-hidden cursor-grab bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:32px_32px]"
+      className="flex-1 relative overflow-hidden cursor-grab bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:32px_32px]"
       onMouseDown={handleMouseDown}
       onWheel={handleWheel}
       onClick={handleCanvasClick}
     >
+      <ParticleBackground />
       <div
         className="absolute top-0 left-0"
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`, transformOrigin: 'top left' }}
@@ -243,6 +248,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               <NodeComponent
                 node={node}
                 isSelected={selectedNodeId === node.id}
+                isExecuting={executingNodeId === node.id}
                 onHandleMouseDown={(e) => { /* handled by parent */ }}
                 isTargetHighlight={isTargetHighlight}
               />
@@ -260,6 +266,13 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
              <marker id="arrowhead-selected" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L0,7 L10,3.5 z" fill="#facc15" />
             </marker>
+            <filter id="yellow-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
         </defs>
         <g style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}>
           {edges.map(edge => {
@@ -268,6 +281,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             if (!sourceNode || !targetNode) return null;
             
             const isSelected = selectedEdgeId === edge.id;
+            const isExecuting = executingNodeId === edge.target;
             const path = getEdgePath(sourceNode, targetNode);
 
             return (
@@ -281,6 +295,18 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   fill="none"
                   markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"}
                 />
+                {isExecuting && (
+                   <path
+                      d={path}
+                      stroke="#facc15"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      fill="none"
+                      strokeDasharray="20 40"
+                      className="edge-flow-animation"
+                      filter="url(#yellow-glow)"
+                    />
+                )}
               </g>
             );
           })}

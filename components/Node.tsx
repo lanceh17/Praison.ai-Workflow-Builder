@@ -10,21 +10,22 @@ import { WaitIcon } from './icons/WaitIcon';
 interface NodeComponentProps {
   node: Node;
   isSelected: boolean;
+  isExecuting: boolean;
   onHandleMouseDown: (e: React.MouseEvent) => void;
   isTargetHighlight: boolean;
 }
 
-const nodeConfig: { [key in NodeTypeString]: { icon: React.FC<any>; emoji: string; color: string; bgColor: string; borderColor: string; } } = {
-  agent: { icon: AgentIcon, emoji: '🤖', color: 'text-amber-300', bgColor: 'bg-amber-900/50', borderColor: 'border-amber-500' },
-  task: { icon: TaskIcon, emoji: '📋', color: 'text-cyan-300', bgColor: 'bg-cyan-900/50', borderColor: 'border-cyan-500' },
-  tool: { icon: ToolIcon, emoji: '🛠️', color: 'text-purple-300', bgColor: 'bg-purple-900/50', borderColor: 'border-purple-500' },
-  trigger: { icon: TriggerIcon, emoji: '⚡', color: 'text-green-300', bgColor: 'bg-green-900/50', borderColor: 'border-green-500' },
-  output: { icon: OutputIcon, emoji: '📤', color: 'text-rose-300', bgColor: 'bg-rose-900/50', borderColor: 'border-rose-500' },
-  wait: { icon: WaitIcon, emoji: '⏳', color: 'text-indigo-300', bgColor: 'bg-indigo-900/50', borderColor: 'border-indigo-500' },
+const nodeConfig: { [key in NodeTypeString]: { icon: React.FC<any>; emoji: string; color: string; bgColor: string; borderColor: string; glowRgb: string; } } = {
+  agent: { icon: AgentIcon, emoji: '🤖', color: 'text-amber-300', bgColor: 'bg-amber-900/50', borderColor: 'border-amber-500', glowRgb: '245, 158, 11' },
+  task: { icon: TaskIcon, emoji: '📋', color: 'text-cyan-300', bgColor: 'bg-cyan-900/50', borderColor: 'border-cyan-500', glowRgb: '6, 182, 212' },
+  tool: { icon: ToolIcon, emoji: '🛠️', color: 'text-purple-300', bgColor: 'bg-purple-900/50', borderColor: 'border-purple-500', glowRgb: '168, 85, 247' },
+  trigger: { icon: TriggerIcon, emoji: '⚡', color: 'text-green-300', bgColor: 'bg-green-900/50', borderColor: 'border-green-500', glowRgb: '22, 163, 74' },
+  output: { icon: OutputIcon, emoji: '📤', color: 'text-rose-300', bgColor: 'bg-rose-900/50', borderColor: 'border-rose-500', glowRgb: '225, 29, 72' },
+  wait: { icon: WaitIcon, emoji: '⏳', color: 'text-indigo-300', bgColor: 'bg-indigo-900/50', borderColor: 'border-indigo-500', glowRgb: '99, 102, 241' },
 };
 
-const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandleMouseDown, isTargetHighlight }) => {
-  const { icon: Icon, emoji, color, bgColor, borderColor } = nodeConfig[node.type];
+const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, isExecuting, onHandleMouseDown, isTargetHighlight }) => {
+  const { icon: Icon, emoji, color, bgColor, borderColor, glowRgb } = nodeConfig[node.type];
   
   const selectionClass = isSelected ? `ring-2 ring-offset-2 ring-offset-slate-900 ring-yellow-400` : 'border-slate-600';
 
@@ -52,10 +53,12 @@ const NodeComponent: React.FC<NodeComponentProps> = ({ node, isSelected, onHandl
   const showToolInput = node.type === 'agent';
   const showOutput = node.type !== 'output';
 
+  const glowStyle = { '--glow-color-rgb': glowRgb } as React.CSSProperties;
 
   return (
     <div
-      className={`w-48 rounded-lg shadow-md border ${bgColor} ${selectionClass} ${isTargetHighlight ? 'ring-2 ring-green-500' : ''} transition-all duration-150 ease-in-out`}
+      style={glowStyle}
+      className={`w-48 rounded-lg shadow-md border ${bgColor} ${selectionClass} ${isTargetHighlight ? 'ring-2 ring-green-500' : ''} ${isExecuting ? 'animate-pulse-glow' : ''} transition-all duration-150 ease-in-out`}
     >
       <div className={`flex items-center gap-3 p-3 rounded-t-lg border-b ${borderColor}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${bgColor} border ${borderColor}`}>
